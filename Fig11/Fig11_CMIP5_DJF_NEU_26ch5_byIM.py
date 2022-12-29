@@ -1,0 +1,248 @@
+#!/usr/bin/env python
+
+# must be in ternary environment:
+# conda activate ternary_plot
+
+from pathlib import Path
+import csv
+import math
+import xarray as xr
+import numpy as np
+import matplotlib
+matplotlib.use("agg")
+from matplotlib import pyplot as plt
+import ternary
+
+def shannon_entropy(p):
+    """Computes the Shannon Entropy at a distribution in the simplex."""
+    s = 0.
+    for i in range(len(p)):
+        try:
+            s += p[i] * math.log(p[i])
+        except ValueError:
+            continue
+    return -1.*s
+
+def main():
+
+    dir = "/**/CMIP_subselection/Data/"
+    filename =dir+"alpha-beta-scan_SM_DJF_CMIP5_both_sum_ch5_sqrt.csv"
+
+    with open(filename, 'r') as f:
+        reader = csv.DictReader(f)
+        data = []
+        for d in reader:
+            d['alpha'] = np.round(float(d['alpha']), 3)
+            d['beta'] = np.round(float(d['beta']), 3)
+            d['models_str'] = ', '.join(sorted([d['member0'],d['member1'],d['member2'],d['member3'],d['member4']]))
+            data.append(d)
+
+    alphas = list(sorted(list(set([d['alpha'] for d in data]))))
+    betas = list(sorted(list(set([d['beta'] for d in data]))))
+    member_combo_data = [[np.nan for _ in betas] for _ in alphas]
+    models_labels = [['' for _ in betas] for _ in alphas]
+    models_costvals = [[0 for _ in betas] for _ in alphas]
+
+    models_to_number = {}
+    for d in data:
+        ia, ib = alphas.index(d['alpha']),  betas.index(d['beta'])
+        assert ia+ib <= 100
+        models_str = d['models_str']
+        models_to_number.setdefault(models_str, len(models_to_number))
+        member_combo_data[ia][ib] = models_to_number[models_str]
+        models_labels[ia][ib] = models_str
+        models_costvals[ia][ib] = float(d['min_val'])
+
+    ds_test = xr.Dataset(dict(idx = (['alpha','beta'],member_combo_data), models=(['alpha','beta'],models_labels),costvals=(['alpha','beta'],models_costvals)), coords=dict(alpha=alphas,beta=betas))
+
+    for k,v in models_to_number.items():
+        print(v, k)
+
+    data = {}
+    for a in ds_test.alpha.data:
+        for b in ds_test.beta.data:
+            c = round(1-a-b,4)
+            if c < 0:
+                continue
+            ia, ib = alphas.index(a),  betas.index(b)
+            data[(ia, 100-ia-ib, ib)] = member_combo_data[ia][ib]
+
+
+    from matplotlib.colors import ListedColormap,LinearSegmentedColormap
+    from matplotlib import colors
+
+##################################
+
+# ## DJF CMIP5 SM ch5 sqrt
+    cmap = ListedColormap([
+    "firebrick", # CSIRO-Mk3-6-0-r10i1p1, GISS-E2-H-r1i1p3, IPSL-CM5B-LR-r1i1p1, MIROC-ESM-r1i1p1, bcc-csm1-1-m-r1i1p1
+    "indianred", # GFDL-ESM2G-r1i1p1, GISS-E2-H-r1i1p3, IPSL-CM5B-LR-r1i1p1, MIROC-ESM-r1i1p1, bcc-csm1-1-m-r1i1p1
+    "crimson", # CSIRO-Mk3-6-0-r10i1p1, GISS-E2-H-r1i1p3, IPSL-CM5B-LR-r1i1p1, NorESM1-ME-r1i1p1, bcc-csm1-1-m-r1i1p1
+    "lightcoral", # CCSM4-r5i1p1, GFDL-ESM2G-r1i1p1, GISS-E2-H-r1i1p3, IPSL-CM5B-LR-r1i1p1, MIROC-ESM-r1i1p1
+    "orangered", # CSIRO-Mk3-6-0-r10i1p1, GFDL-ESM2G-r1i1p1, GISS-E2-H-r1i1p3, IPSL-CM5B-LR-r1i1p1, bcc-csm1-1-m-r1i1p1
+    "coral", # GISS-E2-H-r1i1p3, IPSL-CM5B-LR-r1i1p1, MIROC5-r3i1p1, NorESM1-ME-r1i1p1, bcc-csm1-1-m-r1i1p1
+    "orange", # GISS-E2-H-r1i1p3, IPSL-CM5A-LR-r3i1p1, MIROC5-r3i1p1, NorESM1-ME-r1i1p1, bcc-csm1-1-m-r1i1p1
+    "goldenrod",  # GISS-E2-H-r1i1p3, IPSL-CM5A-MR-r1i1p1, MIROC5-r3i1p1, NorESM1-ME-r1i1p1, bcc-csm1-1-m-r1i1p1
+    "gold", # CESM1-CAM5-r3i1p1, GFDL-ESM2G-r1i1p1, GISS-E2-H-r1i1p3, IPSL-CM5B-LR-r1i1p1, bcc-csm1-1-m-r1i1p1
+    "yellow", # CESM1-CAM5-r3i1p1, GISS-E2-H-r1i1p3, IPSL-CM5A-LR-r3i1p1, MIROC5-r3i1p1, bcc-csm1-1-m-r1i1p1
+    "tab:olive", # CCSM4-r5i1p1, CSIRO-Mk3-6-0-r10i1p1, GFDL-ESM2G-r1i1p1, GISS-E2-H-r1i1p3, IPSL-CM5B-LR-r1i1p1
+    "tab:brown", # ACCESS1-0-r1i1p1, GISS-E2-H-r1i1p3, IPSL-CM5A-MR-r1i1p1, MIROC5-r3i1p1, NorESM1-ME-r1i1p1
+    "sienna",  # CESM1-CAM5-r3i1p1, GFDL-ESM2G-r1i1p1, GISS-E2-H-r1i1p3, IPSL-CM5B-LR-r1i1p1, MIROC-ESM-r1i1p1
+    "peru", # CESM1-CAM5-r3i1p1, GFDL-ESM2G-r1i1p1, GISS-E2-H-r1i1p3, MIROC5-r3i1p1, bcc-csm1-1-m-r1i1p1
+    "olivedrab", # ACCESS1-0-r1i1p1, GISS-E2-H-r1i1p3, MIROC5-r3i1p1, NorESM1-ME-r1i1p1, inmcm4-r1i1p1
+    "yellowgreen", # CESM1-CAM5-r3i1p1, CSIRO-Mk3-6-0-r10i1p1, GFDL-ESM2G-r1i1p1, GISS-E2-H-r1i1p3, MIROC-ESM-r1i1p1
+    "darkgreen", # CCSM4-r5i1p1, CSIRO-Mk3-6-0-r10i1p1, GFDL-ESM2G-r1i1p1, GISS-E2-H-r1i1p3, MIROC5-r3i1p1
+    "tab:green", # ACCESS1-0-r1i1p1, CESM1-CAM5-r3i1p1, GFDL-ESM2G-r1i1p1, GISS-E2-H-r1i1p3, MIROC5-r3i1p1
+    "mediumseagreen", # ACCESS1-0-r1i1p1, CESM1-CAM5-r3i1p1, GISS-E2-H-r1i1p3, MIROC5-r3i1p1, NorESM1-ME-r1i1p1
+    "limegreen", # ACCESS1-0-r1i1p1, CESM1-CAM5-r3i1p1, GFDL-ESM2M-r1i1p1, MIROC5-r3i1p1, inmcm4-r1i1p1
+    "springgreen", # CESM1-CAM5-r3i1p1, GFDL-ESM2G-r1i1p1, GISS-E2-H-r1i1p3, MIROC-ESM-r1i1p1, MIROC5-r3i1p1
+    "palegreen", # ACCESS1-0-r1i1p1, CESM1-CAM5-r3i1p1, GFDL-ESM2G-r1i1p1, GISS-E2-R-r2i1p3, MIROC5-r3i1p1
+    "darkturquoise", # ACCESS1-0-r1i1p1, CESM1-CAM5-r3i1p1, GFDL-CM3-r1i1p1, GISS-E2-H-r1i1p3, MIROC5-r3i1p1
+    "aquamarine", # CESM1-CAM5-r3i1p1, GFDL-CM3-r1i1p1, GFDL-ESM2G-r1i1p1, GISS-E2-H-r1i1p3, MIROC5-r3i1p1
+    "navy", # ACCESS1-0-r1i1p1, CESM1-CAM5-r3i1p1, GFDL-CM3-r1i1p1, MIROC5-r3i1p1, NorESM1-ME-r1i1p1
+    "mediumblue", # ACCESS1-0-r1i1p1, CESM1-CAM5-r3i1p1, GFDL-CM3-r1i1p1, GFDL-ESM2M-r1i1p1, MIROC5-r3i1p1
+    "blue", # ACCESS1-0-r1i1p1, CESM1-CAM5-r3i1p1, GFDL-CM3-r1i1p1, MIROC5-r3i1p1, MPI-ESM-LR-r1i1p1
+    "dodgerblue", # ACCESS1-0-r1i1p1, CESM1-CAM5-r3i1p1, GFDL-CM3-r1i1p1, MIROC5-r3i1p1, MPI-ESM-MR-r1i1p1
+    "deepskyblue", # CSIRO-Mk3-6-0-r10i1p1, GFDL-ESM2G-r1i1p1, IPSL-CM5B-LR-r1i1p1, MIROC-ESM-r1i1p1, MIROC5-r3i1p1
+    "lightskyblue", # CCSM4-r5i1p1, CSIRO-Mk3-6-0-r10i1p1, GFDL-ESM2G-r1i1p1, IPSL-CM5B-LR-r1i1p1, bcc-csm1-1-r1i1p1
+    "lightcyan", # CCSM4-r5i1p1, CSIRO-Mk3-6-0-r10i1p1, GFDL-ESM2G-r1i1p1, IPSL-CM5B-LR-r1i1p1, MIROC5-r3i1p1
+    "mediumslateblue", # CCSM4-r5i1p1, CSIRO-Mk3-6-0-r10i1p1, GFDL-ESM2G-r1i1p1, MIROC-ESM-r1i1p1, MIROC5-r3i1p1
+    "blueviolet", # CESM1-CAM5-r3i1p1, CSIRO-Mk3-6-0-r10i1p1, GFDL-ESM2G-r1i1p1, MIROC-ESM-r1i1p1, MIROC5-r3i1p1
+    "indigo", # ACCESS1-0-r1i1p1, CESM1-CAM5-r3i1p1, GFDL-CM3-r1i1p1, GFDL-ESM2G-r1i1p1, MIROC5-r3i1p1
+    "darkorchid", # ACCESS1-0-r1i1p1, CESM1-CAM5-r3i1p1, GFDL-CM3-r1i1p1, HadGEM2-ES-r4i1p1, MIROC5-r3i1p1
+    "violet", # CESM1-CAM5-r3i1p1, CSIRO-Mk3-6-0-r10i1p1, GFDL-CM3-r1i1p1, GFDL-ESM2G-r1i1p1, MIROC5-r3i1p1
+    "plum", # CSIRO-Mk3-6-0-r10i1p1, GFDL-ESM2G-r1i1p1, IPSL-CM5B-LR-r1i1p1, MIROC-ESM-r1i1p1, NorESM1-M-r1i1p1
+    "mediumvioletred", # CCSM4-r5i1p1, CSIRO-Mk3-6-0-r10i1p1, GFDL-ESM2G-r1i1p1, IPSL-CM5B-LR-r1i1p1, NorESM1-M-r1i1p1
+    "deeppink", # CCSM4-r5i1p1, CSIRO-Mk3-6-0-r10i1p1, GFDL-ESM2G-r1i1p1, MIROC-ESM-r1i1p1, NorESM1-M-r1i1p1
+    "pink", # CESM1-CAM5-r3i1p1, CSIRO-Mk3-6-0-r10i1p1, GFDL-ESM2G-r1i1p1, MIROC-ESM-r1i1p1, bcc-csm1-1-r1i1p1
+    "lavenderblush", # CESM1-CAM5-r3i1p1, CSIRO-Mk3-6-0-r10i1p1, GFDL-ESM2G-r1i1p1, MIROC-ESM-r1i1p1, NorESM1-M-r1i1p1
+    "ivory", # CESM1-CAM5-r3i1p1, CSIRO-Mk3-6-0-r10i1p1, GFDL-CM3-r1i1p1, GFDL-ESM2G-r1i1p1, NorESM1-M-r1i1p1
+    "silver", # ACCESS1-0-r1i1p1, CESM1-CAM5-r3i1p1, CSIRO-Mk3-6-0-r10i1p1, GFDL-CM3-r1i1p1, GFDL-ESM2G-r1i1p1
+    "tab:gray", # ACCESS1-0-r1i1p1, CESM1-CAM5-r3i1p1, GFDL-CM3-r1i1p1, GFDL-ESM2G-r1i1p1, HadGEM2-ES-r4i1p1
+    "k"]) #ACCESS1-0-r1i1p1, CESM1-CAM5-r3i1p1, GFDL-CM3-r1i1p1, HadGEM2-ES-r4i1p1, MPI-ESM-LR-r1i1p1
+
+    cmap_r = cmap.reversed()
+    cb_kwargs = {"ticks" : np.arange(0,v+1)}
+
+##################################################
+    fig = plt.figure(figsize=(15,6)) #8,6, 14,10
+    ax = fig.add_subplot(111)
+
+    tax = ternary.TernaryAxesSubplot(ax=ax, scale=100)
+    tax.boundary(linewidth=1)
+    tax.gridlines(color="w", multiple=10, linewidth=0.5)
+    tax.get_axes().axis('off')
+    tax.clear_matplotlib_ticks()
+
+    tax.ticks(axis='b', linewidth=1, multiple=10, tick_formats="%i%%", offset=.018, clockwise=True,fontsize=12)
+    tax.ticks(axis='r', linewidth=1, multiple=10, tick_formats="%i%%", offset=.026, clockwise=True,fontsize=12)
+    tax.ticks(axis='l', linewidth=1, multiple=10, tick_formats="%i%%", offset=.028, clockwise=True,fontsize=12)
+
+    tax.left_axis_label(r"Performance ([1-$\alpha$-$\beta$] $\times$ 100%)", offset=.15,fontsize=14)
+    tax.right_axis_label(r"Independence ($\alpha$ $\times$ 100%)", offset=.15,fontsize=14)
+    tax.bottom_axis_label(r"Spread  ($\beta$ $\times$ 100%)",offset=0.05,fontsize=14)
+##################################################
+    ternary.heatmap(data, scale=1, ax=ax, style="hexagonal", cmap=cmap_r, colorbar=False)
+    models_list = [k for k,v in sorted(models_to_number.items(), key=lambda it: it[1])]
+    vmin = min(data.values())
+    vmax = max(data.values())
+    norm = plt.Normalize(vmin=vmin, vmax=vmax)
+    sm = plt.cm.ScalarMappable(cmap=cmap, norm=norm)
+    sm._A = []
+    cb = plt.colorbar(sm, ax=ax)
+    cb.set_ticks([(len(models_list)-1)*(i-0.5)/len(models_list) for i in range(1,len(models_list)+1)])
+    models_list.reverse()
+    cb.ax.set_yticklabels(models_list)
+##################################################
+    tax._redraw_labels()
+    fig.tight_layout()
+    fig.savefig(str("Fig11_CMIP5_DJF_NEU_26ch5_byIM.png"),bbox_inches='tight',dpi=300)
+
+# ## DJF CMIP5 SM ch5 sqrt (rec)
+    cmap = ListedColormap([
+    "w", # CSIRO-Mk3-6-0-r10i1p1, GISS-E2-H-r1i1p3, IPSL-CM5B-LR-r1i1p1, MIROC-ESM-r1i1p1, bcc-csm1-1-m-r1i1p1
+    "w", # GFDL-ESM2G-r1i1p1, GISS-E2-H-r1i1p3, IPSL-CM5B-LR-r1i1p1, MIROC-ESM-r1i1p1, bcc-csm1-1-m-r1i1p1
+    "w", # CSIRO-Mk3-6-0-r10i1p1, GISS-E2-H-r1i1p3, IPSL-CM5B-LR-r1i1p1, NorESM1-ME-r1i1p1, bcc-csm1-1-m-r1i1p1
+    "w", # CCSM4-r5i1p1, GFDL-ESM2G-r1i1p1, GISS-E2-H-r1i1p3, IPSL-CM5B-LR-r1i1p1, MIROC-ESM-r1i1p1
+    "w", # CSIRO-Mk3-6-0-r10i1p1, GFDL-ESM2G-r1i1p1, GISS-E2-H-r1i1p3, IPSL-CM5B-LR-r1i1p1, bcc-csm1-1-m-r1i1p1
+    "w", # GISS-E2-H-r1i1p3, IPSL-CM5B-LR-r1i1p1, MIROC5-r3i1p1, NorESM1-ME-r1i1p1, bcc-csm1-1-m-r1i1p1
+    "w", # GISS-E2-H-r1i1p3, IPSL-CM5A-LR-r3i1p1, MIROC5-r3i1p1, NorESM1-ME-r1i1p1, bcc-csm1-1-m-r1i1p1
+    "w",  # GISS-E2-H-r1i1p3, IPSL-CM5A-MR-r1i1p1, MIROC5-r3i1p1, NorESM1-ME-r1i1p1, bcc-csm1-1-m-r1i1p1
+    "w", # CESM1-CAM5-r3i1p1, GFDL-ESM2G-r1i1p1, GISS-E2-H-r1i1p3, IPSL-CM5B-LR-r1i1p1, bcc-csm1-1-m-r1i1p1
+    "w", # CESM1-CAM5-r3i1p1, GISS-E2-H-r1i1p3, IPSL-CM5A-LR-r3i1p1, MIROC5-r3i1p1, bcc-csm1-1-m-r1i1p1
+    "w", # CCSM4-r5i1p1, CSIRO-Mk3-6-0-r10i1p1, GFDL-ESM2G-r1i1p1, GISS-E2-H-r1i1p3, IPSL-CM5B-LR-r1i1p1
+    "w", # ACCESS1-0-r1i1p1, GISS-E2-H-r1i1p3, IPSL-CM5A-MR-r1i1p1, MIROC5-r3i1p1, NorESM1-ME-r1i1p1
+    "w",  # CESM1-CAM5-r3i1p1, GFDL-ESM2G-r1i1p1, GISS-E2-H-r1i1p3, IPSL-CM5B-LR-r1i1p1, MIROC-ESM-r1i1p1
+    "w", # CESM1-CAM5-r3i1p1, GFDL-ESM2G-r1i1p1, GISS-E2-H-r1i1p3, MIROC5-r3i1p1, bcc-csm1-1-m-r1i1p1
+    "w", # ACCESS1-0-r1i1p1, GISS-E2-H-r1i1p3, MIROC5-r3i1p1, NorESM1-ME-r1i1p1, inmcm4-r1i1p1
+    "w", # CESM1-CAM5-r3i1p1, CSIRO-Mk3-6-0-r10i1p1, GFDL-ESM2G-r1i1p1, GISS-E2-H-r1i1p3, MIROC-ESM-r1i1p1
+    "w", # CCSM4-r5i1p1, CSIRO-Mk3-6-0-r10i1p1, GFDL-ESM2G-r1i1p1, GISS-E2-H-r1i1p3, MIROC5-r3i1p1
+    "w", # ACCESS1-0-r1i1p1, CESM1-CAM5-r3i1p1, GFDL-ESM2G-r1i1p1, GISS-E2-H-r1i1p3, MIROC5-r3i1p1
+    "w", # ACCESS1-0-r1i1p1, CESM1-CAM5-r3i1p1, GISS-E2-H-r1i1p3, MIROC5-r3i1p1, NorESM1-ME-r1i1p1
+    "limegreen", # ACCESS1-0-r1i1p1, CESM1-CAM5-r3i1p1, GFDL-ESM2M-r1i1p1, MIROC5-r3i1p1, inmcm4-r1i1p1
+    "w", # CESM1-CAM5-r3i1p1, GFDL-ESM2G-r1i1p1, GISS-E2-H-r1i1p3, MIROC-ESM-r1i1p1, MIROC5-r3i1p1
+    "palegreen", # ACCESS1-0-r1i1p1, CESM1-CAM5-r3i1p1, GFDL-ESM2G-r1i1p1, GISS-E2-R-r2i1p3, MIROC5-r3i1p1
+    "w", # ACCESS1-0-r1i1p1, CESM1-CAM5-r3i1p1, GFDL-CM3-r1i1p1, GISS-E2-H-r1i1p3, MIROC5-r3i1p1
+    "w", # CESM1-CAM5-r3i1p1, GFDL-CM3-r1i1p1, GFDL-ESM2G-r1i1p1, GISS-E2-H-r1i1p3, MIROC5-r3i1p1
+    "navy", # ACCESS1-0-r1i1p1, CESM1-CAM5-r3i1p1, GFDL-CM3-r1i1p1, MIROC5-r3i1p1, NorESM1-ME-r1i1p1
+    "mediumblue", # ACCESS1-0-r1i1p1, CESM1-CAM5-r3i1p1, GFDL-CM3-r1i1p1, GFDL-ESM2M-r1i1p1, MIROC5-r3i1p1
+    "blue", # ACCESS1-0-r1i1p1, CESM1-CAM5-r3i1p1, GFDL-CM3-r1i1p1, MIROC5-r3i1p1, MPI-ESM-LR-r1i1p1
+    "dodgerblue", # ACCESS1-0-r1i1p1, CESM1-CAM5-r3i1p1, GFDL-CM3-r1i1p1, MIROC5-r3i1p1, MPI-ESM-MR-r1i1p1
+    "w", # CSIRO-Mk3-6-0-r10i1p1, GFDL-ESM2G-r1i1p1, IPSL-CM5B-LR-r1i1p1, MIROC-ESM-r1i1p1, MIROC5-r3i1p1
+    "w", # CCSM4-r5i1p1, CSIRO-Mk3-6-0-r10i1p1, GFDL-ESM2G-r1i1p1, IPSL-CM5B-LR-r1i1p1, bcc-csm1-1-r1i1p1
+    "w", # CCSM4-r5i1p1, CSIRO-Mk3-6-0-r10i1p1, GFDL-ESM2G-r1i1p1, IPSL-CM5B-LR-r1i1p1, MIROC5-r3i1p1
+    "w", # CCSM4-r5i1p1, CSIRO-Mk3-6-0-r10i1p1, GFDL-ESM2G-r1i1p1, MIROC-ESM-r1i1p1, MIROC5-r3i1p1
+    "w", # CESM1-CAM5-r3i1p1, CSIRO-Mk3-6-0-r10i1p1, GFDL-ESM2G-r1i1p1, MIROC-ESM-r1i1p1, MIROC5-r3i1p1
+    "indigo", # ACCESS1-0-r1i1p1, CESM1-CAM5-r3i1p1, GFDL-CM3-r1i1p1, GFDL-ESM2G-r1i1p1, MIROC5-r3i1p1
+    "w", # ACCESS1-0-r1i1p1, CESM1-CAM5-r3i1p1, GFDL-CM3-r1i1p1, HadGEM2-ES-r4i1p1, MIROC5-r3i1p1
+    "w", # CESM1-CAM5-r3i1p1, CSIRO-Mk3-6-0-r10i1p1, GFDL-CM3-r1i1p1, GFDL-ESM2G-r1i1p1, MIROC5-r3i1p1
+    "w", # CSIRO-Mk3-6-0-r10i1p1, GFDL-ESM2G-r1i1p1, IPSL-CM5B-LR-r1i1p1, MIROC-ESM-r1i1p1, NorESM1-M-r1i1p1
+    "w", # CCSM4-r5i1p1, CSIRO-Mk3-6-0-r10i1p1, GFDL-ESM2G-r1i1p1, IPSL-CM5B-LR-r1i1p1, NorESM1-M-r1i1p1
+    "w", # CCSM4-r5i1p1, CSIRO-Mk3-6-0-r10i1p1, GFDL-ESM2G-r1i1p1, MIROC-ESM-r1i1p1, NorESM1-M-r1i1p1
+    "w", # CESM1-CAM5-r3i1p1, CSIRO-Mk3-6-0-r10i1p1, GFDL-ESM2G-r1i1p1, MIROC-ESM-r1i1p1, bcc-csm1-1-r1i1p1
+    "w", # CESM1-CAM5-r3i1p1, CSIRO-Mk3-6-0-r10i1p1, GFDL-ESM2G-r1i1p1, MIROC-ESM-r1i1p1, NorESM1-M-r1i1p1
+    "w", # CESM1-CAM5-r3i1p1, CSIRO-Mk3-6-0-r10i1p1, GFDL-CM3-r1i1p1, GFDL-ESM2G-r1i1p1, NorESM1-M-r1i1p1
+    "w", # ACCESS1-0-r1i1p1, CESM1-CAM5-r3i1p1, CSIRO-Mk3-6-0-r10i1p1, GFDL-CM3-r1i1p1, GFDL-ESM2G-r1i1p1
+    "w", # ACCESS1-0-r1i1p1, CESM1-CAM5-r3i1p1, GFDL-CM3-r1i1p1, GFDL-ESM2G-r1i1p1, HadGEM2-ES-r4i1p1
+    "w"]) #ACCESS1-0-r1i1p1, CESM1-CAM5-r3i1p1, GFDL-CM3-r1i1p1, HadGEM2-ES-r4i1p1, MPI-ESM-LR-r1i1p1
+
+
+    cmap_r = cmap.reversed()
+    cb_kwargs = {"ticks" : np.arange(0,v+1)}
+
+##################################################
+    fig = plt.figure(figsize=(15,6)) #8,6, 14,10
+    ax = fig.add_subplot(111)
+
+    tax = ternary.TernaryAxesSubplot(ax=ax, scale=100)
+    tax.boundary(linewidth=1)
+    tax.gridlines(color="w", multiple=10, linewidth=0.5)
+    tax.get_axes().axis('off')
+    tax.clear_matplotlib_ticks()
+
+    tax.ticks(axis='b', linewidth=1, multiple=10, tick_formats="%i%%", offset=.018, clockwise=True,fontsize=12)
+    tax.ticks(axis='r', linewidth=1, multiple=10, tick_formats="%i%%", offset=.026, clockwise=True,fontsize=12)
+    tax.ticks(axis='l', linewidth=1, multiple=10, tick_formats="%i%%", offset=.028, clockwise=True,fontsize=12)
+
+    tax.left_axis_label(r"Performance ([1-$\alpha$-$\beta$] $\times$ 100%)", offset=.15,fontsize=14)
+    tax.right_axis_label(r"Independence ($\alpha$ $\times$ 100%)", offset=.15,fontsize=14)
+    tax.bottom_axis_label(r"Spread  ($\beta$ $\times$ 100%)",offset=0.05,fontsize=14)
+##################################################
+    ternary.heatmap(data, scale=1, ax=ax, style="hexagonal", cmap=cmap_r, colorbar=False)
+    models_list = [k for k,v in sorted(models_to_number.items(), key=lambda it: it[1])]
+    vmin = min(data.values())
+    vmax = max(data.values())
+    norm = plt.Normalize(vmin=vmin, vmax=vmax)
+    sm = plt.cm.ScalarMappable(cmap=cmap, norm=norm)
+    sm._A = []
+    cb = plt.colorbar(sm, ax=ax)
+    cb.set_ticks([(len(models_list)-1)*(i-0.5)/len(models_list) for i in range(1,len(models_list)+1)])
+    models_list.reverse()
+    cb.ax.set_yticklabels(models_list)
+##################################################
+    tax._redraw_labels()
+    fig.tight_layout()
+    fig.savefig(str("Fig11_CMIP5_DJF_NEU_26ch5_byIM_recommendations.png"),bbox_inches='tight',dpi=300)
+
+if __name__ == "__main__":
+    main()
